@@ -1,0 +1,17 @@
+[project]
+name = "nlpds-ex1"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "datasets>=3.6.0",
+    "numpy>=2.2.5",
+    "scikit-learn>=1.6.1",
+    "scipy>=1.15.2",
+    "torch>=2.7.0",
+    "tqdm>=4.67.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.8",
+]
