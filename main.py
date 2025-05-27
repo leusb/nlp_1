@@ -1,4 +1,8 @@
 from datasets import DatasetDict, concatenate_datasets, load_dataset
+from nlpds.submission.ex1_1 import BiGramFeaturizer, BiGramLanguageClassifier
+from nlpds.submission.utils import create_alphabet, create_vocabulary
+
+
 
 # NOTE
 # You may change any part of this file to fit your needs!
@@ -44,12 +48,28 @@ def load_datasets() -> DatasetDict:
 def run_ex1_1():
     datasets = load_datasets()
 
-    # TODO:
-    # - instantiate the featurizer
-    # - featurize the dataset
-    # - train the classifier
-    # - evaluate the classifier
+    # 1. Alphabet und Vokabular
+    alphabet = create_alphabet()
+    vocabulary = create_vocabulary(alphabet)
 
+    # 2. Featurizer erzeugen
+    featurizer = BiGramFeaturizer(vocabulary)
+
+    # 3. Trainings- und Testdaten extrahieren
+    train_texts = datasets["train"]["text"]
+    train_labels = datasets["train"]["lang"]
+    test_texts = datasets["test"]["text"]
+    test_labels = datasets["test"]["lang"]
+
+    # 4. Texte featurisieren
+    train_features = featurizer(train_texts)
+    test_features = featurizer(test_texts)
+
+    # 5. Klassifikator trainieren und auswerten
+    classifier = BiGramLanguageClassifier()
+    classifier.fit(train_features, train_labels)
+    accuracy = classifier.evaluate(test_features, test_labels)
+    print("Test accuracy:", accuracy)
 
 def run_ex1_2():
     dataset = load_dataset(
@@ -61,8 +81,14 @@ def run_ex1_2():
 
 
 if __name__ == "__main__":
+    # alphabet = create_alphabet()
+    # vocabulary = create_vocabulary(alphabet)
+    # featurizer = BiGramFeaturizer(vocabulary)
+    # print(featurizer.n_grams("This is fine"))
+
+
     print("Running Exercise 1 - Task 1")
     run_ex1_1()
 
-    print("Running Exercise 1 - Task 2")
-    run_ex1_2()
+    # print("Running Exercise 1 - Task 2")
+    # run_ex1_2()
