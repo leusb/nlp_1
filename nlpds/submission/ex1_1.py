@@ -56,18 +56,63 @@ class BiGramFeaturizer(AbstractNGramFeaturizer):
 
 class BiGramLanguageClassifier(AbstractLanguageClassifier):
     def __init__(self):
+        """
+        Initialize the language classifier using logistic regression.
+
+        The classifier is based on a scikit-learn LogisticRegression model.
+        The 'sage' solver is chosen since we have a rather big dataset:
+        900k en sentences and 900k de sentences
+        """
         super().__init__()
-        self.model = LogisticRegression(solver="liblinear") 
+        self.model = LogisticRegression(solver="saga",verbose=1, max_iter=10)
 
     def fit(self, features: NDArray, labels: NDArray) -> NDArray:
+        """
+        Train the logistic regression model on the given feature matrix and labels.
+
+        Parameters:
+            features (NDArray): A 2D array of shape (n_samples, n_features) representing
+                                the Bi-gram frequency vectors for each text.
+            labels (NDArray): A 1D array of shape (n_samples,) containing the true labels
+                              (e.g., 'deu' or 'eng') for each sample.
+
+        Returns:
+            NDArray: The predicted labels for the training data.
+        """
+        # Fit  model to the input data
         self.model.fit(features, labels)
+        # Return predictions on the same training data
         return self.model.predict(features)
 
     def predict(self, features: NDArray) -> NDArray:
+        """
+        Predict the labels for the given feature matrix.
+
+        Parameters:
+            features (NDArray): A 2D array of shape (n_samples, n_features) representing
+                                the Bi-gram frequency vectors for each text.
+
+        Returns:
+            NDArray: The predicted labels for each sample.
+        """
         return self.model.predict(features)
 
     def evaluate(self, features: NDArray, labels: NDArray) -> float:
+        """
+        Evaluate the model's accuracy on the given test data.
+
+        Parameters:
+            features (NDArray): A 2D array of shape (n_samples, n_features) representing
+                                the Bi-gram frequency vectors for the test samples.
+            labels (NDArray): A 1D array of shape (n_samples,) containing the true labels.
+
+        Returns:
+            float: The accuracy score (fraction of correct predictions).
+        """
+        # Predict labels for the input features:
+        # Call the internal predict method (which wraps model.predict)
         predictions = self.predict(features)
+        # Compute and return accuracy
         return accuracy_score(labels, predictions)
     # TODO: Document all methods
 
