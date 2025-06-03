@@ -15,7 +15,7 @@ def create_alphabet():
     return alphabet
 
 def create_french_german_alphabet():
-    """Adjusted for exercise 1.3."""
+    """Adjusted for exercise 1.3. Can also be used for English"""
     
     return list("abcdefghijklmnopqrstuvwxyzäöüßàâçéèêëîïôûùüÿœæ #")
 

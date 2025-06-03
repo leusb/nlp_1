@@ -1,9 +1,15 @@
 from datasets import DatasetDict, concatenate_datasets, load_dataset
 from collections import Counter
+from typing import List
+import torch
+import random
+from torch import optim
+
 
 from nlpds.submission.ex1_1 import BiGramFeaturizer, BiGramLanguageClassifier
-from nlpds.submission.utils import create_alphabet, create_vocabulary, evaluate_and_display_results, get_top_bigrams, create_french_german_alphabet
-
+from nlpds.submission.utils_ex1 import *
+from nlpds.submission.ex1_2 import SkipGramEmbedding
+from nlpds.submission.utils_ex2 import *
 
 
 # NOTE
@@ -62,6 +68,24 @@ def load_deu_fra_datasets() -> DatasetDict:
     return DatasetDict({
         "train": concatenate_datasets([dataset_deu["train"], dataset_fra["train"]]),
         "test": concatenate_datasets([dataset_deu["test"], dataset_fra["test"]]),
+    })
+
+def load_datasets_multi(languages: List[str]) -> DatasetDict:
+    """
+    Lädt mehrere Sprachen und erstellt einen kombinierten Trainings- und Test-Datensatz.
+    """
+    datasets = [
+        load_dataset(
+            "Texttechnologylab/leipzig-corpora-collection",
+            "news_2024_1M",
+            split=lang,
+        ).train_test_split(0.1, shuffle=True)  # type: ignore
+        for lang in languages
+    ]
+
+    return DatasetDict({
+        "train": concatenate_datasets([ds["train"] for ds in datasets]),
+        "test": concatenate_datasets([ds["test"] for ds in datasets]),
     })
 
 
@@ -217,15 +241,175 @@ def run_ex1_3():
     test_preds = classifier.predict(test_features)
     evaluate_and_display_results(test_labels, test_preds, label_names=("deu", "fra"))
 
+def run_ex1_1_multi():
+    print("Running Exercise 1.1 (Bonus) – Multi-class classification (deu, eng, fra)")
+
+    # Lade 3 Sprachen
+    datasets = load_datasets_multi(["deu", "eng", "fra"])
+
+    # Vokabular
+    alphabet = create_french_german_alphabet()  # deckt auch eng ab
+    vocabulary = create_vocabulary(alphabet)
+    featurizer = BiGramFeaturizer(vocabulary)
+
+    # Daten vorbereiten
+    train_texts = datasets["train"]["text"]
+    train_labels = datasets["train"]["lang"]
+    test_texts = datasets["test"]["text"]
+    test_labels = datasets["test"]["lang"]
+
+    train_features = featurizer(train_texts)
+    test_features = featurizer(test_texts)
+
+    # Klassifikation
+    classifier = BiGramLanguageClassifier()
+    classifier.fit(train_features, train_labels)
+    accuracy = classifier.evaluate(test_features, test_labels)
+    print("Test accuracy (deu, eng, fra):", accuracy)
+
+    # Ergebnis darstellen
+    test_preds = classifier.predict(test_features)
+    evaluate_and_display_results(test_labels, test_preds, label_names=("deu", "eng", "fra"))
+
+
 
 
 def run_ex1_2():
+    # 1. Daten laden (z. B. nur Deutsch)
     dataset = load_dataset(
         "Texttechnologylab/leipzig-corpora-collection",
         "news_2024_1M",
-        split=...,  # TODO
+        split="deu",
     )
-    # TODO
+
+    sentences = [s.split() for s in dataset["text"][:1000]]  # ⛔ begrenzt für Test!
+    tokens = [tok for s in sentences for tok in s]
+    vocab_set = set(tokens)
+
+    # 2. N-Gramm-Vokabular
+    alphabet = list("abcdefghijklmnopqrstuvwxyzäöüß #")  # oder create_alphabet()
+    ngram_vocab = create_ngram_vocabulary(alphabet, n=3)
+    ngram_to_id = {ng: idx for idx, ng in enumerate(ngram_vocab)}
+
+    # 3. Modell
+    embedding_dim = 50
+    model = SkipGramEmbedding(ngram_vocab, embedding_dim)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+
+    # 4. Trainingsdaten (Triplets)
+    triplets = []
+    for s in sentences:
+        triplets += generate_skipgram_triplets(s, window_size=2, num_negative=3)
+
+    # 5. Training
+    batch_size = 32
+    model.train()
+    for epoch in range(5):
+        random.shuffle(triplets)
+        for i in range(0, len(triplets), batch_size):
+            batch = triplets[i:i+batch_size]
+            if len(batch) < batch_size:
+                continue
+
+            t_tensor, t_offsets, c_tensor, c_offsets, n_tensor, n_offsets, num_neg = triplets_to_tensors(batch, ngram_to_id, n=3)
+
+            target_emb = model.embed_target(t_tensor, t_offsets)
+            context_emb = model.embed_context(c_tensor, c_offsets)
+            neg_emb = model.context_embeddings(n_tensor, n_offsets).view(batch_size, num_neg, -1)
+
+            loss = model(target_emb, context_emb, neg_emb)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        print(f"Epoch {epoch+1} – Loss: {loss.item():.4f}")
+    
+    # Modell evaluieren
+    model.eval()
+    query = "student"
+
+    similar = get_similar_words(
+        query_word=query,
+        vocabulary=list(vocab_set),
+        model=model,
+        ngram_to_id=ngram_to_id,
+        top_k=10,
+        n=3
+    )
+
+    print(f"Ähnliche Wörter zu '{query}':")
+    for word, score in similar:
+        print(f"  {word:12s} → Cosinus: {score:.4f}")
+
+
+def run_ex1_2_with_ngram_size(n: int = 3):
+    print(f"\n### Starte Training mit n = {n} ###")
+
+    # 1. Daten laden (z. B. nur Deutsch)
+    dataset = load_dataset(
+        "Texttechnologylab/leipzig-corpora-collection",
+        "news_2024_1M",
+        split="deu",
+    )
+
+    sentences = [s.split() for s in dataset["text"][:500]]  # etwas kürzer für Tests
+    tokens = [tok for s in sentences for tok in s]
+    vocab_set = set(tokens)
+
+    # 2. N-Gramm-Vokabular
+    alphabet = list("abcdefghijklmnopqrstuvwxyzäöüß #")
+    ngram_vocab = create_ngram_vocabulary(alphabet, n)
+    ngram_to_id = {ng: idx for idx, ng in enumerate(ngram_vocab)}
+
+    # 3. Modell
+    embedding_dim = 50
+    model = SkipGramEmbedding(ngram_vocab, embedding_dim)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+
+    # 4. Trainingsdaten (Triplets)
+    triplets = []
+    for s in sentences:
+        triplets += generate_skipgram_triplets(s, window_size=2, num_negative=3)
+
+    # 5. Training
+    batch_size = 32
+    model.train()
+    for epoch in range(5):
+        random.shuffle(triplets)
+        for i in range(0, len(triplets), batch_size):
+            batch = triplets[i:i+batch_size]
+            if len(batch) < batch_size:
+                continue
+
+            t_tensor, t_offsets, c_tensor, c_offsets, n_tensor, n_offsets, num_neg = triplets_to_tensors(batch, ngram_to_id, n)
+
+            target_emb = model.embed_target(t_tensor, t_offsets)
+            context_emb = model.embed_context(c_tensor, c_offsets)
+            neg_emb = model.context_embeddings(n_tensor, n_offsets).view(batch_size, num_neg, -1)
+
+            loss = model(target_emb, context_emb, neg_emb)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        print(f"Epoch {epoch+1} – Loss: {loss.item():.4f}")
+    
+    # Evaluation
+    model.eval()
+    query = "student"
+
+    similar = get_similar_words(
+        query_word=query,
+        vocabulary=list(vocab_set),
+        model=model,
+        ngram_to_id=ngram_to_id,
+        top_k=10,
+        n=n
+    )
+
+    print(f"\nÄhnliche Wörter zu '{query}' (n = {n}):")
+    for word, score in similar:
+        print(f"  {word:12s} → Cosinus: {score:.4f}")
 
 
 if __name__ == "__main__":
@@ -239,7 +423,8 @@ if __name__ == "__main__":
     # run_ex1_1()
 
     # print("Running Exercise 1 - Task 1.2 (Optimized Vocabulary)")
-    run_ex1_3()
+    # run_ex1_1_multi()
 
     # print("Running Exercise 1 - Task 2")
     # run_ex1_2()
+    run_ex1_2_with_ngram_size(4)
