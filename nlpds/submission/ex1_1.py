@@ -13,7 +13,7 @@ type BiGram = NGram
 
 def is_bi_gram(s: str) -> TypeGuard[BiGram]:
     """
-    Type guard for bi-grams.
+    Type gard for bi-grams.
 
     Parameters:
         s (str): A string to check.
@@ -44,7 +44,7 @@ class BiGramFeaturizer(AbstractNGramFeaturizer):
         """
 
         # Cleaning data
-        sentence = sentence.lower()  # lower case letters
+        sentence = sentence.lower()  # lower case leters
         sentence = re.sub(r"[^a-z #]", "", sentence)  # removing every char except: "a-z #"
 
         # Creating bi-grams
@@ -63,10 +63,10 @@ class BiGramFeaturizer(AbstractNGramFeaturizer):
 
         Returns:
             NDArray: A 1D NumPy array of shape (vocab_size,) where each entry
-                                 corresponds to the frequency of the matching bi-gram.
+                    corresponds to the frequency of the matching bi-gram.
         """
 
-        vector: NDArray[np.float32] = np.zeros(len(self.vocab), dtype=np.float32)
+        vector: NDArray = np.zeros(len(self.vocab))  # verwendet Standardfloat (float64)
         for gram in self.n_grams(sentence):
             if gram in self._vocab_index:
                 index = self._vocab_index[gram]
@@ -88,16 +88,16 @@ class BiGramLanguageClassifier(AbstractLanguageClassifier):
 
     def fit(self, features: NDArray, labels: NDArray) -> NDArray:
         """
-        Train the classifier on the given data (featurized sentences).
+        Train the classifir on the giiven data (featurized sentences).
 
         Parameters:
             features (NDArray): A 2D array of shape (n_samples, n_features) representing
-                                            the Bi-gram frequency vectors for each text.
+                                            the Bigram frequency vectors for each text
             labels (NDArray): A 1D array of shape (n_samples,) containing the true labels
                                       (e.g., 'deu' or 'eng') for each sample.
 
         Returns:
-            NDArray[np.str_]: The predicted labels for the training data.
+            NDArra: The predicted labels for the training data.
         """
         # Fit model to the input data
         self.model.fit(features, labels)
@@ -109,7 +109,7 @@ class BiGramLanguageClassifier(AbstractLanguageClassifier):
         Predict the language for the given featurized sentences.
 
         Parameters:
-            features (NDArray): A 2D array of shape (n_samples, n_features) representing
+            features (NDArray): A 2D aray of shape (n_samples, n_features) representing
                                             the Bi-gram frequency vectors for each text.
 
         Returns:
@@ -122,7 +122,7 @@ class BiGramLanguageClassifier(AbstractLanguageClassifier):
         Evaluate the model's accuracy on the given test data.
 
         Parameters:
-            features (NDArray): A 2D array of shape (n_samples, n_features) representing
+            featues (NDArray): A 2D array of shape (n_samples, n_features) representing
                                             the Bi-gram frequency vectors for the test samples.
             labels (NDArray): A 1D array of shape (n_samples,) containing the true labels.
 
@@ -136,4 +136,22 @@ class BiGramLanguageClassifier(AbstractLanguageClassifier):
 
 
 if __name__ == "__main__":
-    pass
+    # Test functions for BiGramFeaturizer: 
+    example_vocab = ['th', 'he', 'er', 're', 'e ', ' l', 'lo']  # sample bi-grams
+    featurizer = BiGramFeaturizer(example_vocab)
+    sample_sentence = "Hello there"
+    print("Testing n_grams method:", featurizer.n_grams(sample_sentence))
+    feature_vector = featurizer.featurize(sample_sentence)
+    print(f"Bi-gram feature vector for '{sample_sentence}': {feature_vector}")
+
+    # Test functions  BiGramLanguageClassifier: 
+    # Create dummy features and labels
+    some_featurs = np.vstack([feature_vector, feature_vector * 0])  # second sample has zeros
+    some_labels = np.array(['eng', 'deu'])
+    classifier = BiGramLanguageClassifier()
+    train_preds = classifier.fit(some_featurs, some_labels)
+    print(f"Training predictions: {train_preds}")
+    test_preds = classifier.predict(some_featurs)
+    print(f"Test predictions: {test_preds}")
+    accuracy = classifier.evaluate(some_featurs, some_labels)
+    print(f"Accuracy on dummy data: {accuracy}")
